@@ -1,0 +1,2 @@
+npx nodemon --exec "python" Main.py # use this
+npx nodemon --exec "clear;python" Main.py # doesnt work
