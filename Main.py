@@ -4,14 +4,15 @@ import json
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
-# Install the Slack app and get xoxb- token in advance
 app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
 
 Running_Quests = {}
 
 if logging := False:
     import logging
+
     logging.basicConfig(level=logging.DEBUG)
+
 
 class QuestHandler:
     def __init__(self, user_id=None):
@@ -21,6 +22,7 @@ class QuestHandler:
         # if user_id is not None:
         #     self.ping_user = True
         self.user_id = user_id
+        self.stake_item = None
 
     async def start_quest(self, init_text, say=None):
         # self.say = say
@@ -33,7 +35,8 @@ class QuestHandler:
         root_msg = await self.say(init_text)
         self.thread_ts = root_msg["message"]["ts"]
         # true = True
-        await self.say("Item Selection",
+        await self.say(
+            "Item Selection",
             blocks=[
                 {
                     "type": "header",
@@ -86,7 +89,7 @@ class QuestHandler:
             thread_ts=self.thread_ts,
         )
 
-    async def say_threaded(self, text , say=None):
+    async def say_threaded(self, text, say=None):
         if say is not None:
             self.say = say
 
@@ -94,26 +97,28 @@ class QuestHandler:
             text = text.replace(f"<@{self.user_id}>", "").strip()
 
         await self.say(text, thread_ts=self.thread_ts)
-    
+
     def to_dict(self):
         return {
-            'user_id': self.user_id,
-            'thread_ts': self.thread_ts,
-            'ping_user': self.ping_user,
+            "user_id": self.user_id,
+            "thread_ts": self.thread_ts,
+            "ping_user": self.ping_user,
         }
+
     @classmethod
     def from_dict(cls, data):
-        instance = cls(user_id=data.get('user_id'))
-        instance.thread_ts = data.get('thread_ts')
-        instance.ping_user = data.get('ping_user')
+        instance = cls(user_id=data.get("user_id"))
+        instance.thread_ts = data.get("thread_ts")
+        instance.ping_user = data.get("ping_user")
         return instance
 
+
 try:
-    with open('quests.json', 'r') as f:
+    with open("quests.json", "r") as f:
         serializable_quests = json.load(f)
 except FileNotFoundError:
     serializable_quests = []
-    with open('quests.json', 'w') as f:
+    with open("quests.json", "w") as f:
         json.dump(serializable_quests, f)
 
 
@@ -123,6 +128,7 @@ for quest in quests:
     Running_Quests[quest.user_id] = quest
 
 del quests
+
 
 @app.command("/bq-start")
 async def start_quest(ack, body, say):
@@ -136,24 +142,40 @@ async def start_quest(ack, body, say):
         quest_handler = QuestHandler(user_id)
         Running_Quests[user_id] = quest_handler
         await quest_handler.start_quest(f"Hello <@{user_id}>", say)
+    return
+
 
 @app.action("static_select-action")
-async def handle_some_action(ack, body, logger,say):
-    await ack()
+async def handle_some_action(ack, body, logger, say, respond):
     user_id = body["user"]["id"]
     # print(user_id , type(user_id))
+    # print(Running_Quests)
+    if user_id not in Running_Quests.keys():
+        await ack()
+        await respond(f"Hey <@{user_id}>, don’t you even think about messing with me.")
+        return
+
     quest_handler = Running_Quests[user_id]
-    print()
+    # print()
+    # quest_handler.ping_user = None
+    # print(Running_Quests[user_id].ping_user) # WOA PYTHON SYNCS STATES
+    await ack()
     selected_option = body["actions"][0]["selected_option"]
-    await quest_handler.say_threaded(f"You have selected {selected_option['text']['text']}",say)
+    await quest_handler.say_threaded(
+        f"You have selected {selected_option['text']['text']}", say
+    )
+    quest_handler.stake_item = selected_option["text"]["text"].split(" ")[-1]
+    # print(quest_handler.stake_item)
     await quest_handler.say_threaded("Quest Complete!")
     await end_quest(user_id)
-
+    return
 
 
 async def end_quest(user_id):
     Running_Quests.pop(user_id)
     print(f"Ended quest for {user_id}")
+    return
+
 
 @app.event("app_mention")
 async def event_test(event, say):
@@ -178,6 +200,6 @@ if __name__ == "__main__":
         print("Exiting")
     finally:
         quests = [quest.to_dict() for quest in Running_Quests.values()]
-        with open('quests.json', 'w') as f:
+        with open("quests.json", "w") as f:
             json.dump(quests, f)
         del quests
