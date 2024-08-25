@@ -8,7 +8,9 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
 app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
 
-bag_instance.configure(int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["QUEST_OWNER_ID"])
+bag_instance.configure(
+    int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["QUEST_OWNER_ID"]
+)
 
 
 Running_Quests = {}
@@ -72,7 +74,7 @@ class QuestHandler:
                             {
                                 "text": {
                                     "type": "plain_text",
-                                    "text": ":-gp: 10 gp",
+                                    "text": ":-carrot: Carrot",
                                     "emoji": true,
                                 },
                                 "value": "value-1",
@@ -147,29 +149,80 @@ async def start_quest(ack, body, say):
         quest_handler = QuestHandler(user_id)
         Running_Quests[user_id] = quest_handler
         await quest_handler.start_quest(f"Hello <@{user_id}>", say)
+        # await quest_handler.say_threaded(f"{bag_instance.get_inventory(user_id)}")
     return
+
+
+@app.command("/bq-wipe")
+async def clear_pending(ack, body, respond):
+    user_id = body["user_id"]
+    if user_id != os.environ["QUEST_OWNER_ID"]:
+        await ack()
+        await respond(
+            f"Hey <@{user_id}>, only the owner can interact with the options."
+        )
+        return
+    else:
+        n = len(Running_Quests)
+        Running_Quests.clear()
+        await ack()
+        # with open("quests.json", "w") as f:
+        #     json.dump([], f)
+        await respond(f"Wiped {n} quests")
 
 
 @app.action("static_select-action")
 async def handle_some_action(ack, body, logger, say, respond):
     user_id = body["user"]["id"]
     # print(user_id , type(user_id))
-    # print(Running_Quests)
-    if user_id not in Running_Quests.keys():
+    try:
+        quest_handler = Running_Quests[user_id]
+    except KeyError:
         await ack()
-        await respond(f"Hey <@{user_id}>, don’t you even think about messing with me.")
+        await respond(
+            f"Hey <@{user_id}>, You have already chosen an item or all quests have been wiped."
+        )
+        return
+    # print(Running_Quests)
+    if user_id != quest_handler.user_id:
+        await ack()
+        await respond(
+            f"Hey <@{user_id}>, only the quest owner can interact with the options."
+        )
         return
 
-    quest_handler = Running_Quests[user_id]
+    # if user_id not in Running_Quests.keys():
+    #     await ack()
+    #     await respond(f"Hey <@{user_id}>, You have already chosen an item.")
+    #     return
     # print()
     # quest_handler.ping_user = None
     # print(Running_Quests[user_id].ping_user) # WOA PYTHON SYNCS STATES
+
     await ack()
     selected_option = body["actions"][0]["selected_option"]
     await quest_handler.say_threaded(
         f"You have selected {selected_option['text']['text']}", say
     )
     quest_handler.stake_item = selected_option["text"]["text"].split(" ")[-1]
+    inv = bag_instance.get_inventory("U07HEB24LCC")
+    print(inv)
+
+    #     message OfferItem {
+    #   optional string itemName = 1;
+    #   optional int32 quantity = 2;
+    # }
+    print(quest_handler.stake_item)
+    offer_item = {'itemName': quest_handler.stake_item, 'quantity': 1}
+    # print(offer_item)
+
+    # def make_offer(self, target_identity_id: str, offer_to_give: RCFContainer[bag_pb2.OfferItem], offer_to_receive: RCFContainer[bag_pb2.OfferItem]):
+    #     if self.stub is None:
+    #         raise ValueError("BagManager not configured. Call bm_instance.configure() first.")
+    #     result = self.stub.MakeOffer(bag_pb2.MakeOfferRequest(appId=self.app_id, key=self.key, sourceIdentityId=self.owner_id, ))
+
+    bag_instance.make_offer(target_identity_id=user_id, offer_to_give=offer_item, offer_to_receive=offer_item)
+
     # print(quest_handler.stake_item)
     await quest_handler.say_threaded("Quest Complete!")
     await end_quest(user_id)
@@ -178,7 +231,7 @@ async def handle_some_action(ack, body, logger, say, respond):
 
 async def end_quest(user_id):
     Running_Quests.pop(user_id)
-    print(f"Ended quest for {user_id}")
+    # print(f"Ended quest for {user_id}")
     return
 
 
@@ -201,6 +254,7 @@ if __name__ == "__main__":
 
     try:
         asyncio.run(main())
+        # TODO: Add a resouce usage monitor
     except KeyboardInterrupt:
         print("Exiting")
     finally:

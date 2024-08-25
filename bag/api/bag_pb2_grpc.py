@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import bag.api.bag_pb2 as bag_pb2
+import bag.api.bag_pb2 as bag__pb2
 
 GRPC_GENERATED_VERSION = '1.66.0'
 GRPC_VERSION = grpc.__version__
