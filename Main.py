@@ -1,10 +1,15 @@
 import os
 import json
 
+from bag import bag_instance
+
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
 app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
+
+bag_instance.configure(int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["QUEST_OWNER_ID"])
+
 
 Running_Quests = {}
 
