@@ -2,6 +2,7 @@ import os
 import json
 
 from bag import bag_instance
+from bag.api import bag_pb2
 
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -9,7 +10,7 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
 
 bag_instance.configure(
-    int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["QUEST_OWNER_ID"]
+    int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["BAG_OWNER"]
 )
 
 
@@ -156,7 +157,7 @@ async def start_quest(ack, body, say):
 @app.command("/bq-wipe")
 async def clear_pending(ack, body, respond):
     user_id = body["user_id"]
-    if user_id != os.environ["QUEST_OWNER_ID"]:
+    if user_id != os.environ["BAG_OWNER"]:
         await ack()
         await respond(
             f"Hey <@{user_id}>, only the owner can interact with the options."
@@ -206,14 +207,16 @@ async def handle_some_action(ack, body, logger, say, respond):
     )
     quest_handler.stake_item = selected_option["text"]["text"].split(" ")[-1]
     inv = bag_instance.get_inventory("U07HEB24LCC")
-    print(inv)
+    # print(inv)
 
     #     message OfferItem {
     #   optional string itemName = 1;
     #   optional int32 quantity = 2;
     # }
-    print(quest_handler.stake_item)
-    offer_item = {'itemName': quest_handler.stake_item, 'quantity': 1}
+    # print(quest_handler.stake_item)
+    # offer_item = {'itemName': quest_handler.stake_item, 'quantity': 1}
+    # bag_pb2.OfferItem(**offer_item)
+    offer_item = bag_pb2.OfferItem(itemName=quest_handler.stake_item, quantity=1)
     # print(offer_item)
 
     # def make_offer(self, target_identity_id: str, offer_to_give: RCFContainer[bag_pb2.OfferItem], offer_to_receive: RCFContainer[bag_pb2.OfferItem]):

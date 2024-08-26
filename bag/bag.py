@@ -3,7 +3,7 @@ try:
 except ImportError:
     raise ImportError("The `bag` plugin is not available when the `bag` extra is not installed.")
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer as RCFContainer
-from longchain.plugins.bag.api import bag_pb2_grpc, bag_pb2
+from .api import bag_pb2_grpc, bag_pb2
 
 class BagManager:
     app_id = None
