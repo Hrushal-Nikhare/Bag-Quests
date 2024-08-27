@@ -1,11 +1,11 @@
 import os
 import json
+from multiprocessing import Process
+import json
 
 from bag import bag_instance
 
-# from bag.api import bag_pb2
-from multiprocessing import Process
-
+from google.protobuf.json_format import MessageToDict
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 
@@ -143,7 +143,6 @@ del quests
 @app.command("/bq-start")
 async def start_quest(ack, body, say):
     user_id = body["user_id"]
-    # print(user_id, type(user_id))
     await ack()
     if user_id in Running_Quests:
         await say(f"<@{user_id}> You already have a quest running")
@@ -169,15 +168,12 @@ async def clear_pending(ack, body, respond):
         n = len(Running_Quests)
         Running_Quests.clear()
         await ack()
-        # with open("quests.json", "w") as f:
-        #     json.dump([], f)
         await respond(f"Wiped {n} quests")
 
 
 @app.action("static_select-action")
 async def handle_some_action(ack, body, logger, say, respond):
     user_id = body["user"]["id"]
-    # print(user_id , type(user_id))
     try:
         quest_handler = Running_Quests[user_id]
     except KeyError:
@@ -186,7 +182,7 @@ async def handle_some_action(ack, body, logger, say, respond):
             f"Hey <@{user_id}>, You have already chosen an item or all quests have been wiped."
         )
         return
-    # print(Running_Quests)
+
     if user_id != quest_handler.user_id:
         await ack()
         await respond(
@@ -194,13 +190,6 @@ async def handle_some_action(ack, body, logger, say, respond):
         )
         return
 
-    # if user_id not in Running_Quests.keys():
-    #     await ack()
-    #     await respond(f"Hey <@{user_id}>, You have already chosen an item.")
-    #     return
-    # print()
-    # quest_handler.ping_user = None
-    # print(Running_Quests[user_id].ping_user) # WOA PYTHON SYNCS STATES
     print(user_id)
     await ack()
     selected_option = body["actions"][0]["selected_option"]
@@ -208,42 +197,39 @@ async def handle_some_action(ack, body, logger, say, respond):
         f"You have selected {selected_option['text']['text']}", say
     )
     quest_handler.stake_item = selected_option["text"]["text"].split(" ")[-1]
-    inv = bag_instance.get_inventory("U07HEB24LCC")
-    # print(inv)
 
-    #     message OfferItem {
-    #   optional string itemName = 1;
-    #   optional int32 quantity = 2;
-    # }
-    # print(quest_handler.stake_item)
-    # offer_item = {'itemName': quest_handler.stake_item, 'quantity': 1}
-    # bag_pb2.OfferItem(**offer_item)
-    offer_item = [{"itemName": "Carrot", "quantity": 1}]
-    # recive_item = [{"itemName": "gp", "quantity": 1}]
-    recive_item = []
-    # print(offer_item.itemName)  # Output: Sample Item
-    # print(offer_item.quantity)  # Output: 5
+    inventory = MessageToDict(bag_instance.get_inventory(user_id))
 
-    # print(offer_item)
+    item_present = False
 
-    # def make_offer(self, target_identity_id: str, offer_to_give: RCFContainer[bag_pb2.OfferItem], offer_to_receive: RCFContainer[bag_pb2.OfferItem]):
-    #     if self.stub is None:
-    #         raise ValueError("BagManager not configured. Call bm_instance.configure() first.")
-    # result = self.stub.MakeOffer(bag_pb2.MakeOfferRequest(appId=self.app_id, key=self.key, sourceIdentityId=self.owner_id, ))
-    # try:
-    ah = bag_instance.make_offer(
-        target_identity_id=user_id,
-        offer_to_give=offer_item,
-        offer_to_receive=recive_item,
-        callback_url=f"https://c8bb-49-36-33-127.ngrok-free.app/{user_id}",
-    )
-    # print(ah)
-    # except Exception as e:
-    # await quest_handler.say_threaded(f"Error: {e}", say)
-    # print(quest_handler.stake_item)
-    await quest_handler.say_threaded("Quest Complete!")
-    await end_quest(user_id)
-    return
+    for item in inventory["inventory"]:
+        if item["itemId"] == quest_handler.stake_item:
+            item_present = True
+            break
+
+    if not item_present:
+        await quest_handler.say_threaded(
+            f"You do not have the item {quest_handler.stake_item}"
+        )
+        await quest_handler.say_threaded("Quest Failed!")
+        await end_quest(user_id)
+        return
+
+    # offer_item = [{"itemName": "Carrot", "quantity": 1}]
+    if item_present:
+        recive_item = [{"itemName": quest_handler.stake_item, "quantity": 1}]
+        offer_item = []
+
+        ah = bag_instance.make_offer(
+            target_identity_id=user_id,
+            offer_to_give=offer_item,
+            offer_to_receive=recive_item,
+            callback_url=f"https://c8bb-49-36-33-127.ngrok-free.app/{user_id}",
+        )
+
+        await quest_handler.say_threaded("Quest Complete!")
+        await end_quest(user_id)
+        return
 
 
 async def end_quest(user_id):
@@ -266,15 +252,19 @@ async def main():
     await handler.start_async()
 
 
-def webserver():
+def start_webserver():
     from robyn import Robyn
+
     webserver = Robyn(__file__)
 
-    @webserver.get("/:user_id")
+    @webserver.post("/:user_id")
     async def h(request):
-        # print(user_id := request.params["user_id"])
-        print(request.params)
-        return "Hello, world!"
+        user_id = request.path_params["user_id"]
+        print(user_id)
+        return {
+            "description": "Request received",
+            "status_code": 200,
+        }
 
     webserver.start(port=8080)
 
@@ -283,12 +273,11 @@ if __name__ == "__main__":
     import asyncio
 
     try:
-        p2 = Process(target=webserver,name="Webserver")
+        p2 = Process(target=start_webserver, name="Webserver")
         p2.start()
         # p1 = Process(target=asyncio.run(main()))
         # p1.start()
         asyncio.run(main())
-
 
         # TODO: Add a resouce usage monitor
 
