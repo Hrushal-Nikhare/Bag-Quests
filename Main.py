@@ -2,11 +2,12 @@ import os
 import json
 
 from bag import bag_instance
-from bag.api import bag_pb2
+
+# from bag.api import bag_pb2
+from multiprocessing import Process
 
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
-from google.protobuf.internal.containers import RepeatedCompositeFieldContainer as RCFContainer
 
 app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
 
@@ -200,7 +201,7 @@ async def handle_some_action(ack, body, logger, say, respond):
     # print()
     # quest_handler.ping_user = None
     # print(Running_Quests[user_id].ping_user) # WOA PYTHON SYNCS STATES
-
+    print(user_id)
     await ack()
     selected_option = body["actions"][0]["selected_option"]
     await quest_handler.say_threaded(
@@ -208,7 +209,7 @@ async def handle_some_action(ack, body, logger, say, respond):
     )
     quest_handler.stake_item = selected_option["text"]["text"].split(" ")[-1]
     inv = bag_instance.get_inventory("U07HEB24LCC")
-    print(inv)
+    # print(inv)
 
     #     message OfferItem {
     #   optional string itemName = 1;
@@ -217,24 +218,28 @@ async def handle_some_action(ack, body, logger, say, respond):
     # print(quest_handler.stake_item)
     # offer_item = {'itemName': quest_handler.stake_item, 'quantity': 1}
     # bag_pb2.OfferItem(**offer_item)
-    offer_item = [bag_pb2.OfferItem(itemName="Carrot", quantity=1)]
+    offer_item = [{"itemName": "Carrot", "quantity": 1}]
+    # recive_item = [{"itemName": "gp", "quantity": 1}]
+    recive_item = []
     # print(offer_item.itemName)  # Output: Sample Item
     # print(offer_item.quantity)  # Output: 5
-    
+
     # print(offer_item)
 
     # def make_offer(self, target_identity_id: str, offer_to_give: RCFContainer[bag_pb2.OfferItem], offer_to_receive: RCFContainer[bag_pb2.OfferItem]):
     #     if self.stub is None:
     #         raise ValueError("BagManager not configured. Call bm_instance.configure() first.")
-    #     result = self.stub.MakeOffer(bag_pb2.MakeOfferRequest(appId=self.app_id, key=self.key, sourceIdentityId=self.owner_id, ))
-    try:
-        bag_instance.make_offer(
-            target_identity_id=user_id,
-            offer_to_give=offer_item,
-            offer_to_receive=offer_item,
-        )
-    except Exception as e:
-        await quest_handler.say_threaded(f"Error: {e}", say)
+    # result = self.stub.MakeOffer(bag_pb2.MakeOfferRequest(appId=self.app_id, key=self.key, sourceIdentityId=self.owner_id, ))
+    # try:
+    ah = bag_instance.make_offer(
+        target_identity_id=user_id,
+        offer_to_give=offer_item,
+        offer_to_receive=recive_item,
+        callback_url=f"https://c8bb-49-36-33-127.ngrok-free.app/{user_id}",
+    )
+    # print(ah)
+    # except Exception as e:
+    # await quest_handler.say_threaded(f"Error: {e}", say)
     # print(quest_handler.stake_item)
     await quest_handler.say_threaded("Quest Complete!")
     await end_quest(user_id)
@@ -261,13 +266,37 @@ async def main():
     await handler.start_async()
 
 
+def webserver():
+    from robyn import Robyn
+    webserver = Robyn(__file__)
+
+    @webserver.get("/:user_id")
+    async def h(request):
+        # print(user_id := request.params["user_id"])
+        print(request.params)
+        return "Hello, world!"
+
+    webserver.start(port=8080)
+
+
 if __name__ == "__main__":
     import asyncio
 
     try:
+        p2 = Process(target=webserver,name="Webserver")
+        p2.start()
+        # p1 = Process(target=asyncio.run(main()))
+        # p1.start()
         asyncio.run(main())
+
+
         # TODO: Add a resouce usage monitor
+
     except KeyboardInterrupt:
+        p2.join()
+        p2.close()
+        # p1.close()
+        # raise SystemExit
         print("Exiting")
     finally:
         quests = [quest.to_dict() for quest in Running_Quests.values()]
