@@ -5,6 +5,7 @@ import json
 
 from bag import bag_instance
 
+import asyncio
 from google.protobuf.json_format import MessageToDict
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
@@ -33,6 +34,7 @@ class QuestHandler:
         #     self.ping_user = True
         self.user_id = user_id
         self.stake_item = None
+        self.approved = False
 
     async def start_quest(self, init_text, say=None):
         # self.say = say
@@ -142,6 +144,7 @@ del quests
 
 @app.command("/bq-start")
 async def start_quest(ack, body, say):
+    global Running_Quests
     user_id = body["user_id"]
     await ack()
     if user_id in Running_Quests:
@@ -158,7 +161,7 @@ async def start_quest(ack, body, say):
 @app.command("/bq-wipe")
 async def clear_pending(ack, body, respond):
     user_id = body["user_id"]
-    if user_id != os.environ["BAG_OWNER"]:
+    if user_id != 'U03V4B5H8DP':
         await ack()
         await respond(
             f"Hey <@{user_id}>, only the owner can interact with the options."
@@ -169,10 +172,18 @@ async def clear_pending(ack, body, respond):
         Running_Quests.clear()
         await ack()
         await respond(f"Wiped {n} quests")
+    recive_item = [{"itemName": "Carrot", "quantity": 1}]
+    offer_item = []
+    return_val = bag_instance.make_offer(
+        target_identity_id=user_id,
+        offer_to_give=recive_item,
+        offer_to_receive=offer_item,
+    )
 
 
 @app.action("static_select-action")
 async def handle_some_action(ack, body, logger, say, respond):
+    global Running_Quests
     user_id = body["user"]["id"]
     try:
         quest_handler = Running_Quests[user_id]
@@ -190,7 +201,7 @@ async def handle_some_action(ack, body, logger, say, respond):
         )
         return
 
-    print(user_id)
+    # print(user_id)
     await ack()
     selected_option = body["actions"][0]["selected_option"]
     await quest_handler.say_threaded(
@@ -224,9 +235,27 @@ async def handle_some_action(ack, body, logger, say, respond):
             target_identity_id=user_id,
             offer_to_give=offer_item,
             offer_to_receive=recive_item,
-            callback_url=f"https://c8bb-49-36-33-127.ngrok-free.app/{user_id}",
+            callback_url=f"https://366c-49-36-33-127.ngrok-free.app/{user_id}",
         )
+        max_wait = 600
+        # print(quest_handler.approved)
+        for i in range(max_wait // 6):
+            quest_handler = Running_Quests[user_id]
+            if quest_handler.approved:
+                break
+            await asyncio.sleep(10)
 
+        if quest_handler.approved is False:
+            await quest_handler.say_threaded("Quest Failed!")
+            await end_quest(user_id)
+            return
+        else:
+            return_val = bag_instance.make_offer(
+                target_identity_id=user_id,
+                offer_to_give=recive_item,
+                offer_to_receive=offer_item,
+            )
+        print(return_val)
         await quest_handler.say_threaded("Quest Complete!")
         await end_quest(user_id)
         return
@@ -253,14 +282,20 @@ async def main():
 
 
 def start_webserver():
+    global Running_Quests
     from robyn import Robyn
 
     webserver = Robyn(__file__)
 
     @webserver.post("/:user_id")
     async def h(request):
+        global Running_Quests
         user_id = request.path_params["user_id"]
-        print(user_id)
+        print(Running_Quests)
+        Running_Quests[user_id].approved = True
+        # print(Running_Quests)
+        print(f"Approved {user_id}")
+        # print(user_id)
         return {
             "description": "Request received",
             "status_code": 200,
@@ -270,7 +305,6 @@ def start_webserver():
 
 
 if __name__ == "__main__":
-    import asyncio
 
     try:
         p2 = Process(target=start_webserver, name="Webserver")
