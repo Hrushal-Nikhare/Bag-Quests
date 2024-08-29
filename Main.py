@@ -1,6 +1,6 @@
 import os
 import json
-from multiprocessing import Process
+from multiprocessing import Process ,  Manager
 import json
 
 from bag import bag_instance
@@ -133,14 +133,16 @@ except FileNotFoundError:
     with open("quests.json", "w") as f:
         json.dump(serializable_quests, f)
 
+def load_quests():
+    global Running_Quests
+    quests = [QuestHandler.from_dict(data) for data in serializable_quests]
 
-quests = [QuestHandler.from_dict(data) for data in serializable_quests]
+    for quest in quests:
+        Running_Quests[quest.user_id] = quest
 
-for quest in quests:
-    Running_Quests[quest.user_id] = quest
+    del quests
 
-del quests
-
+load_quests()
 
 @app.command("/bq-start")
 async def start_quest(ack, body, say):
@@ -235,9 +237,9 @@ async def handle_some_action(ack, body, logger, say, respond):
             target_identity_id=user_id,
             offer_to_give=offer_item,
             offer_to_receive=recive_item,
-            callback_url=f"https://366c-49-36-33-127.ngrok-free.app/{user_id}",
+            callback_url=f"https://e9b2-49-36-33-127.ngrok-free.app/{user_id}",
         )
-        max_wait = 600
+        max_wait = 60
         # print(quest_handler.approved)
         for i in range(max_wait // 6):
             quest_handler = Running_Quests[user_id]
@@ -281,34 +283,36 @@ async def main():
     await handler.start_async()
 
 
-def start_webserver():
-    global Running_Quests
-    from robyn import Robyn
+# def start_webserver():
+#     global Running_Quests
+#     from robyn import Robyn
 
-    webserver = Robyn(__file__)
+#     webserver = Robyn(__file__)
 
-    @webserver.post("/:user_id")
-    async def h(request):
-        global Running_Quests
-        user_id = request.path_params["user_id"]
-        print(Running_Quests)
-        Running_Quests[user_id].approved = True
-        # print(Running_Quests)
-        print(f"Approved {user_id}")
-        # print(user_id)
-        return {
-            "description": "Request received",
-            "status_code": 200,
-        }
+#     @webserver.post("/:user_id")
+#     async def h(request):
+#         global Running_Quests
+#         user_id = request.path_params["user_id"]
+#         print(Running_Quests)
+#         Running_Quests[user_id].approved = True
+#         # print(Running_Quests)
+#         print(f"Approved {user_id}")
+#         # print(user_id)
+#         return {
+#             "description": "Request received",
+#             "status_code": 200,
+#         }
 
-    webserver.start(port=8080)
+#     webserver.start(port=8080)
 
 
 if __name__ == "__main__":
-
+    # manager = Manager()
+    # Running_Quests = manager.dict()
+    # load_quests()
     try:
-        p2 = Process(target=start_webserver, name="Webserver")
-        p2.start()
+        # p2 = Process(target=start_webserver, name="Webserver")
+        # p2.start()
         # p1 = Process(target=asyncio.run(main()))
         # p1.start()
         asyncio.run(main())
@@ -321,6 +325,7 @@ if __name__ == "__main__":
         # p1.close()
         # raise SystemExit
         print("Exiting")
+
     finally:
         quests = [quest.to_dict() for quest in Running_Quests.values()]
         with open("quests.json", "w") as f:
