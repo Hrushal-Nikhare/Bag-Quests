@@ -1,3 +1,5 @@
-# CREDIT to https://github.com/rivques/longchain/
+# A Big Thank You!
 
-ALL CODE FROM HIS REPO
+We would like to extend our heartfelt gratitude to [rivques](https://github.com/rivques/longchain/) for their amazing work. 
+
+This project is built upon the fantastic code from their repository. Thank you for your contribution!

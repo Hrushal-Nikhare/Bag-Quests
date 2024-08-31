@@ -2,6 +2,7 @@ import os
 import json
 from multiprocessing import Process ,  Manager
 import json
+import random
 
 from bag import bag_instance
 
@@ -15,7 +16,6 @@ app = AsyncApp(token=os.environ["SLACK_BOT_TOKEN"])
 bag_instance.configure(
     int(os.environ["BAG_ID"]), os.environ["BAG_TOKEN"], os.environ["BAG_OWNER"]
 )
-
 
 Running_Quests = {}
 
@@ -282,6 +282,12 @@ async def main():
     handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
     await handler.start_async()
 
+async def rolld20():
+    # RIGIG IT CUZ I CAN
+    possible_values = [1]*2 + [2]*2 + [3]*2 + [4]*2 + [5]*2 + [6]*2 + [7]*2 + [8]*2 + [9]*2 + [10]*2 + [11]*2 + [12]*2 + [13]*2 + [14]*2 + [15]*2 + [16]*2 + [17]*2 + [18]*2 + [19]*2 + [20]*1
+    print(possible_values)
+    value = random.choice(possible_values)
+    return value
 
 # def start_webserver():
 #     global Running_Quests
